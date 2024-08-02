@@ -1,7 +1,8 @@
 mod passutils;
 
-use std::{fs, io::{self, Error, Write}};
+use std::{fs, io::{self, Error, Write}, str::FromStr};
 use clap::{Args, Parser, Subcommand};
+use openssl::conf;
 use passutils::{export_password_file, find_pw_index, generate_key, generate_password, import_password_file, PasswordEntry};
 use serde_json;
 use whoami;
@@ -19,6 +20,15 @@ const DEFAULT_PREFS: &str=
     \"allow_special\": true,
 }
 ";
+
+enum POSTIONS{
+    DefaultFile,
+    DefaultLen,
+    AllowLower,
+    AllowUpper,
+    AllowDigit,
+    AllowSpecial
+}
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -84,7 +94,7 @@ fn login(passwords: &mut Vec<PasswordEntry>, file_path: &mut String, new_path: &
 }
 
 // reads the user's configurtation file and returns the json value of it, or an error, and as a side-effect, updates the file path variable
-fn read_user_config(file_path: &mut String) -> Result<serde_json::Value, Error>{
+fn read_user_config(file_path: &mut String) -> Result<(String, u64, bool, bool, bool, bool), Error>{
     // parse the user's config
     let config_path = format!("/home/{}/.config/passmanager/config.json", whoami::username());
     let config_str: String;
@@ -118,7 +128,7 @@ fn read_user_config(file_path: &mut String) -> Result<serde_json::Value, Error>{
         return Err(Error::new(std::io::ErrorKind::Other, ""));
     }
     *file_path = config.get("default_file").unwrap().to_string().replace("\"", "");
-    Ok(config)
+    Ok((config["default_file"].to_string(), config["default_len"].as_u64().unwrap(), config["allow_lower"].as_bool().unwrap(), config["allow_upper"].as_bool().unwrap(), config["allow_digit"].as_bool().unwrap(), config["allow_special"].as_bool().unwrap()))
 }
 
 
@@ -141,7 +151,7 @@ fn main() {
         }
         Commands::NewFile{path} => {
             let mut file_path = String::new();
-            let mut config: serde_json::Value;
+            let mut config: (String, u64, bool, bool, bool, bool);
             match read_user_config(&mut file_path) {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
@@ -159,9 +169,12 @@ fn main() {
             }
             // create the password file, and make it the default file if there is not one already
             export_password_file(&path, password, passwords).expect("Cannot create the password file");
-            if config["default_file"] == "none"{
-                config["default_file"] = serde_json::Value::String(path);
-                fs::write(format!("/home/{}/.config/passmanager/config.json", whoami::username()), config.to_string()).expect("Cannot update the config file");
+            if config.0 == "none"{
+                // update the config file with a new default file
+                let config_path = format!("/home/{}/.config/passmanager/config.json", whoami::username());
+                let config_str = fs::read_to_string(&config_path).unwrap();
+                let new_config = serde_json::Value::from_str(&config_str).unwrap();
+                fs::write(config_path, new_config.to_string()).unwrap();
 
             }
             println!("New password file created!");
@@ -170,7 +183,7 @@ fn main() {
         Commands::Create(args) => {
             // parse the user config
             let mut file_path = String::new();
-            let config: serde_json::Value;
+            let config: (String, u64, bool, bool, bool, bool);
             match read_user_config(&mut file_path) {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
@@ -206,16 +219,11 @@ fn main() {
                 }
                 false => {
                     // read the user preferences to generate a password, and create the password
-                    let mut pw_len = config["default_len"].as_u64().unwrap();
+                    let mut pw_len = config.1;
                     if args.len.is_some(){
                         pw_len = args.len.unwrap();
                     }
-                    generate_password(pw_len, 
-                                        config["allow_lower"].as_bool().unwrap(), 
-                                        config["allow_upper"].as_bool().unwrap(),
-                                         config["allow_digit"].as_bool().unwrap(), 
-                                        config["allow_special"].as_bool().unwrap(), 
-                                        &mut password);
+                    generate_password(pw_len, config.2, config.3, config.4, config.5, &mut password);
                 }
             }
             let mut pw_key: [u8; 32] = [0; 32];
@@ -228,7 +236,7 @@ fn main() {
         Commands::Get(args) => {
             // parse the user config
             let mut file_path = String::new();
-            let config: serde_json::Value;
+            let config: (String, u64, bool, bool, bool, bool);
             match read_user_config(&mut file_path) {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
@@ -251,7 +259,7 @@ fn main() {
         Commands::Delete(args) => {
             // parse the user config
             let mut file_path = String::new();
-            let config: serde_json::Value;
+            let config: (String, u64, bool, bool, bool, bool);
             match read_user_config(&mut file_path) {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
@@ -275,7 +283,7 @@ fn main() {
         Commands::Update(args) => {
             // parse the user config
             let mut file_path = String::new();
-            let config: serde_json::Value;
+            let config: (String, u64, bool, bool, bool, bool);
             match read_user_config(&mut file_path) {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
@@ -292,13 +300,8 @@ fn main() {
                     // get the new password
                     let mut new_pass = read_password("New password (leave blank to generate a random password)");
                     if new_pass == ""{
-                        let pw_len = config["default_len"].as_u64().unwrap();
-                        generate_password(pw_len, 
-                            config["allow_lower"].as_bool().unwrap(), 
-                            config["allow_upper"].as_bool().unwrap(),
-                             config["allow_digits"].as_bool().unwrap(), 
-                            config["allow_special"].as_bool().unwrap(), 
-                            &mut new_pass);
+                        let pw_len = config.1;
+                        generate_password(pw_len, config.2, config.3, config.4, config.5, &mut new_pass);
                     }
                     // update the password entry
                     let pass_entry = PasswordEntry::new(&tmp.key, &tmp.site_name, &new_pass);
@@ -312,7 +315,7 @@ fn main() {
         Commands::LS { path } => {
             // parse the user config
             let mut file_path = String::new();
-            let config: serde_json::Value;
+            let config: (String, u64, bool, bool, bool, bool);
             match read_user_config(&mut file_path) {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
