@@ -18,6 +18,9 @@ While passmanager uses AES-256-CBC encryption, it has not been formally audited 
 - Create a password database file with `passmanager new-file <path/to/file.pwdb>` (This file will be the default location for all future password operations)
 
 # Usage
+## Password Database (.pwdb) Files:
+Passwords are stored in .pwdb files. Every .pwdb is encrypted with a key derived from the user's master password (set at file creation). Take extreme care to remember/store this master password, because there is currently no way to recover password data without it. 
+
 ## Commands:
 ### init:
 - Usage: `passmanager init`
