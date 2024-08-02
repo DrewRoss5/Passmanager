@@ -1,5 +1,5 @@
 # Passmanager
-A CLI password manager written in Rust⚠
+A CLI password manager written in Rust
 ### ⚠️ Warning ⚠️
 While passmanager uses AES-256-CBC encryption, it has not been formally audited for security, as such there may be unknown vulnerabilites. **Use with caution.**
 
