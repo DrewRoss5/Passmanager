@@ -21,15 +21,6 @@ const DEFAULT_PREFS: &str=
 }
 ";
 
-enum POSTIONS{
-    DefaultFile,
-    DefaultLen,
-    AllowLower,
-    AllowUpper,
-    AllowDigit,
-    AllowSpecial
-}
-
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 #[command(propagate_version = true)]
