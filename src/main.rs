@@ -2,7 +2,6 @@ mod passutils;
 
 use std::{fs, io::{self, Error, Write}, str::FromStr};
 use clap::{Args, Parser, Subcommand};
-use openssl::conf;
 use passutils::{export_password_file, find_pw_index, generate_key, generate_password, import_password_file, PasswordEntry};
 use serde_json;
 use whoami;
@@ -37,7 +36,7 @@ enum Commands{
     Get(DefaultArgs),
     Update(DefaultArgs),
     Delete(DefaultArgs),
-    LS {path: Option<String>}
+    LS {path: Option<String>},
 }
 
 #[derive(Args)]
@@ -85,7 +84,7 @@ fn login(passwords: &mut Vec<PasswordEntry>, file_path: &mut String, new_path: &
 }
 
 // reads the user's configurtation file and returns the json value of it, or an error, and as a side-effect, updates the file path variable
-fn read_user_config(file_path: &mut String) -> Result<(String, u64, bool, bool, bool, bool), Error>{
+fn read_user_config() -> Result<(String, u64, bool, bool, bool, bool), Error>{
     // parse the user's config
     let config_path = format!("/home/{}/.config/passmanager/config.json", whoami::username());
     let config_str: String;
@@ -118,8 +117,7 @@ fn read_user_config(file_path: &mut String) -> Result<(String, u64, bool, bool, 
         println!("Invalid config file");
         return Err(Error::new(std::io::ErrorKind::Other, ""));
     }
-    *file_path = config.get("default_file").unwrap().to_string().replace("\"", "");
-    Ok((config["default_file"].to_string(), config["default_len"].as_u64().unwrap(), config["allow_lower"].as_bool().unwrap(), config["allow_upper"].as_bool().unwrap(), config["allow_digit"].as_bool().unwrap(), config["allow_special"].as_bool().unwrap()))
+    Ok((config["default_file"].to_string().replace("\"", ""), config["default_len"].as_u64().unwrap(), config["allow_lower"].as_bool().unwrap(), config["allow_upper"].as_bool().unwrap(), config["allow_digit"].as_bool().unwrap(), config["allow_special"].as_bool().unwrap()))
 }
 
 
@@ -141,9 +139,8 @@ fn main() {
              
         }
         Commands::NewFile{path} => {
-            let mut file_path = String::new();
-            let mut config: (String, u64, bool, bool, bool, bool);
-            match read_user_config(&mut file_path) {
+            let config: (String, u64, bool, bool, bool, bool);
+            match read_user_config() {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
             }
@@ -173,12 +170,12 @@ fn main() {
         // creates a new password
         Commands::Create(args) => {
             // parse the user config
-            let mut file_path = String::new();
             let config: (String, u64, bool, bool, bool, bool);
-            match read_user_config(&mut file_path) {
+            match read_user_config() {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
             }
+            let mut file_path = config.0;
             // log the user in
             let master_password: String;
             match login(&mut passwords, &mut file_path, &args.file_path){
@@ -226,12 +223,12 @@ fn main() {
         }
         Commands::Get(args) => {
             // parse the user config
-            let mut file_path = String::new();
             let config: (String, u64, bool, bool, bool, bool);
-            match read_user_config(&mut file_path) {
+            match read_user_config() {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
             }
+            let mut file_path = config.0;
             // log the user in
             if login(&mut passwords, &mut file_path, &args.file_path).is_err(){
                 return;
@@ -249,12 +246,12 @@ fn main() {
         }
         Commands::Delete(args) => {
             // parse the user config
-            let mut file_path = String::new();
             let config: (String, u64, bool, bool, bool, bool);
-            match read_user_config(&mut file_path) {
+            match read_user_config() {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
             }
+            let mut file_path = config.0;
             // log the user in
             let master_password: String;
             match login(&mut passwords, &mut file_path, &args.file_path){
@@ -273,12 +270,12 @@ fn main() {
         }
         Commands::Update(args) => {
             // parse the user config
-            let mut file_path = String::new();
             let config: (String, u64, bool, bool, bool, bool);
-            match read_user_config(&mut file_path) {
+            match read_user_config() {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
             }
+            let mut file_path = config.0;
             // log the user in
             let master_password: String;
             match login(&mut passwords, &mut file_path, &args.file_path){
@@ -305,12 +302,12 @@ fn main() {
         }
         Commands::LS { path } => {
             // parse the user config
-            let mut file_path = String::new();
             let config: (String, u64, bool, bool, bool, bool);
-            match read_user_config(&mut file_path) {
+            match read_user_config() {
                 Ok(tmp) => {config = tmp}
                 Err(_) => {return;}   
             }
+            let mut file_path = config.0;
             // log the user in
             match login(&mut passwords, &mut file_path, &path){
                 Ok(_) => {}
@@ -324,6 +321,5 @@ fn main() {
             }
             else{println!("No passwords are in this database.")}
         }
-        
    }
 }   
