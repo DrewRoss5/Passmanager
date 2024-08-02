@@ -4,7 +4,6 @@ A CLI password manager written in Rust
 While passmanager uses AES-256-CBC encryption, it has not been formally audited for security, as such there may be unknown vulnerabilites. **Use with caution.**
 
 # Roadmap/ToDo
-- Add password creation options to user config
 - Add export functionality
 - Add support for bulk actions
 - Add password "directories" to store related passwords
