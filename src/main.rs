@@ -8,6 +8,18 @@ use whoami;
 use rpassword;
 use copypasta::{self, ClipboardProvider};
 
+const DEFAULT_PREFS: &str= 
+"
+{
+    \"default_file\': \"none\",
+    \"default_len\': 16,
+    \"allow_upper\": true,
+    \"allow_lower\": true,
+    \"allow_digit\": true,
+    \"allow_special\": true,
+}
+";
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -34,8 +46,8 @@ struct CreateArgs{
     file_path: Option<String>,
     #[clap(short, long)]
     manual: Option<bool>,
-    #[clap(short, long, default_value_t = 16)]
-    len: u32
+    #[clap(short, long)]
+    len: Option<u64>
 }
 
 #[derive(Args)]
@@ -72,7 +84,6 @@ fn login(passwords: &mut Vec<PasswordEntry>, file_path: &mut String, new_path: &
 }
 
 // reads the user's configurtation file and returns the json value of it, or an error, and as a side-effect, updates the file path variable
-// TODO: Make this validate the user's config
 fn read_user_config(file_path: &mut String) -> Result<serde_json::Value, Error>{
     // parse the user's config
     let config_path = format!("/home/{}/.config/passmanager/config.json", whoami::username());
@@ -92,6 +103,20 @@ fn read_user_config(file_path: &mut String) -> Result<serde_json::Value, Error>{
             return Err(Error::new(std::io::ErrorKind::Other, ""));
         }
     }
+    // validate that all that all values are present
+    let arg_names: [&str; 6] = ["default_file", "default_len", "allow_lower", "allow_upper", "allow_digit", "allow_special"];
+    for i in arg_names{
+        if config.get(i).is_none(){
+            println!("Invalid config file: Missing value for {}", i);
+            return Err(Error::new(std::io::ErrorKind::Other, ""));
+        }
+    }
+    // validate that all values are the correct types
+    let type_checks = [config["default_file"].is_string(), config["default_len"].is_u64(), config["allow_lower"].is_boolean(), config["allow_upper"].is_boolean(), config["allow_digit"].is_boolean(), config["allow_special"].is_boolean()];
+    if type_checks.contains(&false){
+        println!("Invalid config file");
+        return Err(Error::new(std::io::ErrorKind::Other, ""));
+    }
     *file_path = config.get("default_file").unwrap().to_string().replace("\"", "");
     Ok(config)
 }
@@ -107,7 +132,8 @@ fn main() {
             if !fs::metadata("/home/{}/.config/passmanager").is_ok(){
                 fs::create_dir(format!("/home/{}/.config/passmanager", whoami::username())).unwrap();
             }
-            match fs::write(format!("/home/{}/.config/passmanager/config.json", whoami::username()), "{\n\t\"default_file\": \"none\"\n}"){
+            match fs::write(format!("/home/{}/.config/passmanager/config.json", whoami::username()), DEFAULT_PREFS)
+            {
                 Ok(_) => {println!("Welcome to passmanager!")}
                 Err(_) => {println!("Could not initialize the config file")}
             }
@@ -179,7 +205,17 @@ fn main() {
                     }
                 }
                 false => {
-                    generate_password(args.len, &"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMOPQRSTUVWXYZ1234567890!@#$%^&*()[];':".chars().collect(), &mut password);
+                    // read the user preferences to generate a password, and create the password
+                    let mut pw_len = config["default_len"].as_u64().unwrap();
+                    if args.len.is_some(){
+                        pw_len = args.len.unwrap();
+                    }
+                    generate_password(pw_len, 
+                                        config["allow_lower"].as_bool().unwrap(), 
+                                        config["allow_upper"].as_bool().unwrap(),
+                                         config["allow_digit"].as_bool().unwrap(), 
+                                        config["allow_special"].as_bool().unwrap(), 
+                                        &mut password);
                 }
             }
             let mut pw_key: [u8; 32] = [0; 32];
@@ -256,8 +292,13 @@ fn main() {
                     // get the new password
                     let mut new_pass = read_password("New password (leave blank to generate a random password)");
                     if new_pass == ""{
-                        let len: usize = tmp.password.len();
-                        generate_password(len.try_into().unwrap(),&"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMOPQRSTUVWXYZ1234567890!@#$%^&*()[];':".chars().collect(), &mut new_pass);
+                        let pw_len = config["default_len"].as_u64().unwrap();
+                        generate_password(pw_len, 
+                            config["allow_lower"].as_bool().unwrap(), 
+                            config["allow_upper"].as_bool().unwrap(),
+                             config["allow_digits"].as_bool().unwrap(), 
+                            config["allow_special"].as_bool().unwrap(), 
+                            &mut new_pass);
                     }
                     // update the password entry
                     let pass_entry = PasswordEntry::new(&tmp.key, &tmp.site_name, &new_pass);
@@ -291,4 +332,4 @@ fn main() {
         }
         
    }
-}
+}   

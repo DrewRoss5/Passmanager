@@ -33,7 +33,22 @@ pub fn find_pw_index(passwords: &Vec<PasswordEntry>, target: &String) -> Option<
 }
 
 // genrates a new password of length n, using only characters in the provided charset, writes the password to the provided string
-pub fn generate_password(n: u32, charset: &Vec<char>, password: &mut String){
+pub fn generate_password(n: u64, allow_lower: bool, allow_upper: bool, allow_digits: bool, allow_special: bool, password: &mut String){
+    // determine the allowed character set
+    let mut charset_str = String::new();
+    if allow_lower{
+        charset_str += "abcdefghijkmnopqrstuvwxyz";
+    }
+    if allow_upper{
+        charset_str += "ABCDEFGHJIKLMNOPQRSTUVWXYZ";
+    }
+    if allow_digits{
+        charset_str += "1234567890";
+    }
+    if allow_special{
+        charset_str += "!@#$%^&*()-=+_\"';:,./\\"
+    }
+    let charset: Vec<char> = charset_str.chars().collect();
     let mut rng = OsRng;
     let len = charset.len();
     for _ in 0..n{
