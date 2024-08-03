@@ -3,6 +3,12 @@ use rand::{rngs::OsRng, Rng, RngCore};
 use openssl::{symm::{decrypt, encrypt, Cipher}, sha::Sha256};
 use base64::{prelude::BASE64_STANDARD, Engine};
 
+// positions of the items in a vector of a password file heade
+const IV_POS: usize = 0;
+const KEY_SALT_POS: usize = 1;
+const CHECKSUM_POS: usize = 2;
+const CHECKSUM_SALT_POS: usize = 3;
+
 pub struct  PasswordEntry{
     pub key: [u8; 32],
     pub site_name: String,
@@ -60,6 +66,35 @@ pub fn generate_password(n: u64, allow_lower: bool, allow_upper: bool, allow_dig
 pub fn generate_key(key: &mut [u8; 32]){
     let mut rng = OsRng;
     rng.fill_bytes(key);
+}
+
+// parses the header of a password file
+fn parse_header(file_header: &Vec<u8>) -> Result<Vec<&[u8]>, Error>{
+    if file_header.len() != 80{
+        return  Err(Error::new(ErrorKind::InvalidData, "Invalid password database header."));
+    }
+    let iv = &file_header[0..16];
+    let key_salt = &file_header[16..32];
+    let checksum = &file_header[32..64];
+    let checksum_salt = &file_header[64..file_header.len()];
+    Ok([iv, key_salt, checksum, checksum_salt].to_vec())
+}
+
+// ensures a password is valid, given the checksum, and returns the key if so
+fn hash_key(master_password: &String, key_salt: &[u8], checksum_salt: &[u8], checksum: &[u8]) -> Result<[u8; 32], Error>{
+    // hash the key 
+    let mut key_hash = Sha256::new();
+    key_hash.update(master_password.as_bytes());
+    key_hash.update(key_salt);
+    let master_key = key_hash.finish();
+    // validate the key
+    let mut checksum_hash = Sha256::new();
+    checksum_hash.update(&master_key);
+    checksum_hash.update(checksum_salt);
+    match checksum == checksum_hash.finish(){
+        true => {Ok(master_key)}
+        false => {Err(Error::new(ErrorKind::InvalidInput, "Invalid password"))}
+    }
 }
 
 // encrypts a plaintext string and returns the ciphertext as bytes, with the IV and a checksum prepended to it
@@ -131,6 +166,31 @@ fn decrypt_password(ciphertext: String, key: &[u8; 32]) -> Result<PasswordEntry,
     }
 }
 
+// decrypts a password file, given the encrypted keyblock, and passwords
+fn decrypt_password_file(master_key: &[u8], keyblock_b64: &str, header_segments: &Vec<&[u8]>, file_segments: &Vec<&str>) -> Result<Vec<PasswordEntry>, Error>{
+    let kb_ciphertext = BASE64_STANDARD.decode(keyblock_b64).expect("Invalid key block");
+    // attempt to decrypt the keyblock
+    let key_cipher = Cipher::aes_256_cbc();
+    let keyblock: Vec<u8>;
+    match decrypt(key_cipher, &master_key, Some(&header_segments[IV_POS]), &kb_ciphertext) {
+        Ok(tmp_bytes) => {keyblock = tmp_bytes}
+        Err(_) => {return Err(Error::new(ErrorKind::Other, "Invalid key block"));}
+    }
+    // validate the size of the keyblock
+    if keyblock.len() % 32 != 0{
+        return  Err(Error::new(ErrorKind::InvalidData, "Invalid keyblock"));
+    }
+    // decrypt each password
+    let mut passwords: Vec<PasswordEntry> = Vec::new();
+    let keys: Vec<&[u8]> = keyblock.chunks(32).collect();
+    let mut tmp_key: [u8; 32];
+    for i in 0..keys.len(){
+        tmp_key = keys[i].try_into().expect("Invalid Keyblock");
+        passwords.push(decrypt_password(file_segments[i + 2].to_string(), &tmp_key)?);
+    }
+    Ok(passwords)
+}
+
 // encrypts a vector of password entries, and writes them to a file, along with the metadata
 pub fn export_password_file(file_path: &String, master_password: String, passwords: Vec<PasswordEntry>) -> Result<(), Error>{
     // create a master key from the master password, as well as a random iv
@@ -188,39 +248,46 @@ pub fn import_password_file(file_path: &String, master_password: &String) -> Res
         return  Err(Error::new(ErrorKind::InvalidInput, "Invalid password database file"));
     }
     let header = BASE64_STANDARD.decode(segments[0]).expect("Invalid base64 string");
-    let kb_ciphertext = BASE64_STANDARD.decode(segments[1]).expect("Invalid base64 string");
-    // parse the header
-    let iv = &header[0..16];
-    let key_salt = &header[16..32];
-    let checksum = &header[32..64];
-    let checksum_salt = &header[64..header.len()];
-    // hash the key
-    let mut key_hash = Sha256::new();
-    key_hash.update(master_password.as_bytes());
-    key_hash.update(key_salt);
-    let master_key = key_hash.finish();
-    // validate the key
-    let mut checksum_hash = Sha256::new();
-    checksum_hash.update(&master_key);
-    checksum_hash.update(&checksum_salt);
-    let key_checksum = checksum_hash.finish();
-    if checksum != key_checksum{
-        return  Err(Error::new(ErrorKind::Other, "Incorrect password"));
+    let header_segments = parse_header(&header)?;
+    // hash the key and decrpt the passwords
+    let master_key = hash_key(master_password, header_segments[KEY_SALT_POS], header_segments[CHECKSUM_SALT_POS], header_segments[CHECKSUM_POS])?;
+    decrypt_password_file(&master_key, segments[1], &header_segments, &segments)
+}
+
+// exports the key from a password file
+pub fn export_file_key(password_file: &String, master_password: &String) -> Result<[u8; 32], Error>{
+    // read the password file
+    let file_contents: String;
+    match fs::read_to_string(password_file){
+        Ok(tmp) => {file_contents = tmp}
+        Err(_) => {return Err(Error::new(ErrorKind::Other, "Failed to read the password file (does it exist?)"));}
     }
-    // decrypt the key block
-    let key_cipher = Cipher::aes_256_cbc();
-    let keyblock: Vec<u8>;
-    match decrypt(key_cipher, &master_key, Some(&iv), &kb_ciphertext) {
-        Ok(tmp_bytes) => {keyblock = tmp_bytes}
-        Err(_) => {return Err(Error::new(ErrorKind::Other, "Invalid key block"));}
+    let segments: Vec<&str> = file_contents.split(";").collect();
+    let file_header = segments[0];
+    let header_bytes = BASE64_STANDARD.decode(file_header).unwrap();
+    let header_segments = parse_header(&header_bytes)?;
+    hash_key(master_password, header_segments[KEY_SALT_POS], header_segments[CHECKSUM_SALT_POS], header_segments[CHECKSUM_POS])
+}
+
+// decrypts a password database file with the raw key as opposed to a master password
+pub fn key_import_password_file(password_file: &String, key_file: &String) -> Result<Vec<PasswordEntry>, Error>{
+    // read the key file
+    let master_key: Vec<u8>;
+    match fs::read(key_file){
+        Ok(key) => {master_key = key}
+        Err(_) => {return Err(Error::new(ErrorKind::InvalidData, "Invalid key file"))}
     }
-    // decrypt each password
-    let mut passwords: Vec<PasswordEntry> = Vec::new();
-    let keys: Vec<&[u8]> = keyblock.chunks(32).collect();
-    let mut tmp_key: [u8; 32];
-    for i in 0..keys.len(){
-        tmp_key = keys[i].try_into().expect("Invalid Keyblock");
-        passwords.push(decrypt_password(segments[i + 2].to_string(), &tmp_key)?);
+    if master_key.len() != 32{
+        return Err(Error::new(ErrorKind::InvalidData, "Invalid key file"))
     }
-    Ok(passwords)
+    // parse and decrypt the password file
+    let pwdb_contents: String;
+    match fs::read_to_string(password_file){
+        Ok(tmp) => {pwdb_contents = tmp}
+        Err(_) => {return Err(Error::new(ErrorKind::InvalidData, "Invalid password file"))}
+    }
+    let file_segments: Vec<&str> = pwdb_contents.split(";").collect();
+    let file_header = BASE64_STANDARD.decode(file_segments[0]).expect("Invalid file header");
+    let header_segments = parse_header(&file_header)?;
+    decrypt_password_file(&master_key, file_segments[1], &header_segments, &file_segments)
 }

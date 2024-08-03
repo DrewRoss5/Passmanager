@@ -2,7 +2,7 @@ mod passutils;
 
 use std::{fs, io::{self, Error, Write}, str::FromStr};
 use clap::{Args, Parser, Subcommand};
-use passutils::{export_password_file, find_pw_index, generate_key, generate_password, import_password_file, PasswordEntry};
+use passutils::{export_file_key, export_password_file, find_pw_index, generate_key, generate_password, import_password_file, key_import_password_file, PasswordEntry};
 use serde_json;
 use whoami;
 use rpassword;
@@ -25,7 +25,7 @@ const DEFAULT_PREFS: &str=
 #[command(propagate_version = true)]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Commands
 }
 
 #[derive(Subcommand)]
@@ -37,6 +37,8 @@ enum Commands{
     Update(DefaultArgs),
     Delete(DefaultArgs),
     LS {path: Option<String>},
+    ExportKey(KeyArgs),
+    ResetPassword(KeyArgs)
 }
 
 #[derive(Args)]
@@ -56,7 +58,14 @@ struct DefaultArgs{
     #[clap(short, long)]
     file_path: Option<String>
 }
- 
+
+// arguments for commands relating to key files (export-key and import-with-key)
+#[derive(Args)]
+struct KeyArgs{
+    key_file: String,
+    #[clap(short, long)]
+    pw_file: Option<String>
+}
 // reads a user-provided password without displaying the input
 fn read_password(prompt: &str) -> String{
     print!("{}: ", prompt);
@@ -320,6 +329,61 @@ fn main() {
                 }
             }
             else{println!("No passwords are in this database.")}
+        }
+        Commands::ExportKey(args) => {
+            // parse the user config and the desired file path
+            let config: (String, u64, bool, bool, bool, bool);
+            match read_user_config() {
+                Ok(tmp) => {config = tmp}
+                Err(_) => {return;}   
+            }
+            let mut pw_file_path = config.0;
+            if args.pw_file.is_some(){
+                pw_file_path = args.pw_file.unwrap();
+            }
+            // attempt to export the key to the chosen file
+            let master_password = read_password("Master Password");
+            match export_file_key(&pw_file_path, &master_password) {
+                Ok(key) => {
+                    if fs::write(&args.key_file, key).is_ok(){
+                        println!("Key exported succesfully.");
+                        return;
+                    }
+                    println!("Cannot write the key to the keyfile")
+                }
+                Err(e) => {println!("{}", e)}
+            }
+        }
+        Commands::ResetPassword(args) => {
+            // parse the user config and the desired file path
+            let config: (String, u64, bool, bool, bool, bool);
+            match read_user_config() {
+                Ok(tmp) => {config = tmp}
+                Err(_) => {return;}   
+            }
+            let mut pw_file_path = config.0;
+            if args.pw_file.is_some(){
+                pw_file_path = args.pw_file.unwrap();
+            }
+            // get the new password for the password file
+            let new_password = read_password("New password");
+            let confirm = read_password("Confirm");
+            if new_password != confirm{
+                println!("New password does not match confirmation");
+                return;
+            }
+            // attempt to decrypt the current password file
+            let passwords: Vec<PasswordEntry>;
+            match key_import_password_file(&pw_file_path, &args.key_file){
+                Ok(tmp) => {passwords = tmp}
+                Err(e) => {
+                    println!("{}", e);
+                    return;
+                }
+            }
+            // overwrite the password file with new password
+            export_password_file(&pw_file_path, new_password, passwords).expect("Cannot update the password file");
+            println!("Password updated successfully");
         }
    }
 }   
