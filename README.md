@@ -17,7 +17,7 @@ While passmanager uses AES-256-CBC encryption, it has not been formally audited 
 
 # Usage
 ## Password Database (.pwdb) Files:
-Passwords are stored in .pwdb files. Every .pwdb is encrypted with a key derived from the user's master password (set at file creation). Take extreme care to remember/store this master password, because there is currently no way to recover password data without it. 
+Passwords are stored in .pwdb files. Every .pwdb is encrypted with a key derived from the user's master password (set at file creation). This can be changed with the password database's key file
 
 ## Commands:
 ### init:
