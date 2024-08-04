@@ -2,7 +2,7 @@ mod passutils;
 
 use std::{fs, io::{self, Error, Write}, str::FromStr};
 use clap::{Args, Parser, Subcommand};
-use passutils::{export_file_key, export_password_file, find_pw_index, generate_key, generate_password, import_password_file, key_import_password_file, PasswordEntry};
+use passutils::{export_file_key, export_password_file, find_pw_index, generate_key, generate_password, get_time, import_password_file, key_import_password_file, PasswordEntry};
 use serde_json;
 use whoami;
 use rpassword;
@@ -34,6 +34,7 @@ enum Commands{
     NewFile {path: String},
     Create(CreateArgs),
     Get(DefaultArgs),
+    GetInfo(DefaultArgs),
     Update(DefaultArgs),
     Delete(DefaultArgs),
     LS {path: Option<String>},
@@ -225,7 +226,8 @@ fn main() {
             }
             let mut pw_key: [u8; 32] = [0; 32];
             generate_key(&mut pw_key);
-            passwords.push(PasswordEntry::new(&pw_key, &args.title, &password));
+            let time = get_time();
+            passwords.push(PasswordEntry::new(&pw_key, &args.title, &password, &time, &time));
             // update the passwords
             export_password_file(&file_path, master_password, passwords).expect("Cannot create the new password");
             println!("Password created succesfully")
@@ -251,6 +253,26 @@ fn main() {
                     loop {}
                 }
                 None => {println!("The password for {} does not exist", &args.title)}
+            }
+        }
+        Commands::GetInfo(args) => {
+            // parse the user config
+            let config: (String, u64, bool, bool, bool, bool);
+            match read_user_config() {
+                Ok(tmp) => {config = tmp}
+                Err(_) => {return;}   
+            }
+            let mut file_path = config.0;
+            // log the user in
+            if login(&mut passwords, &mut file_path, &args.file_path).is_err(){
+                return;
+            }
+            match find_pw_index(&passwords, &args.title){
+                Some(index) => {
+                    let tmp_pw = &passwords[index];
+                    println!("Site name: {}\nDate created: {}\nLast modified: {}", tmp_pw.site_name, tmp_pw.create_date, tmp_pw.modify_date);
+                }
+                None => {println!("The password for {} does not exist", args.title);}
             }
         }
         Commands::Delete(args) => {
@@ -301,7 +323,7 @@ fn main() {
                         generate_password(pw_len, config.2, config.3, config.4, config.5, &mut new_pass);
                     }
                     // update the password entry
-                    let pass_entry = PasswordEntry::new(&tmp.key, &tmp.site_name, &new_pass);
+                    let pass_entry = PasswordEntry::new(&tmp.key, &tmp.site_name, &new_pass, &tmp.create_date, &get_time());
                     passwords[index] = pass_entry;
                     export_password_file(&file_path, master_password, passwords).unwrap();
                     println!("Password updated successfully");

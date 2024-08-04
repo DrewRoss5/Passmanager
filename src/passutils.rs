@@ -2,6 +2,7 @@ use std::{fs, io::{Error, ErrorKind}};
 use rand::{rngs::OsRng, Rng, RngCore};
 use openssl::{symm::{decrypt, encrypt, Cipher}, sha::Sha256};
 use base64::{prelude::BASE64_STANDARD, Engine};
+use chrono;
 
 // positions of the items in a vector of a password file heade
 const IV_POS: usize = 0;
@@ -12,61 +13,30 @@ const CHECKSUM_SALT_POS: usize = 3;
 pub struct  PasswordEntry{
     pub key: [u8; 32],
     pub site_name: String,
-    pub password: String
+    pub password: String,
+    pub create_date: String,
+    pub modify_date: String
 }
 
 impl PasswordEntry{
-    pub fn new(key: &[u8; 32], site_name: &String, password: &String) -> PasswordEntry{
-        Self { key: key.clone(), site_name: site_name.to_string(), password: password.to_string() }
+    pub fn new(key: &[u8; 32], site_name: &String, password: &String, create_date: &String, modify_date: &String) -> PasswordEntry{
+        Self { key: key.clone(), site_name: site_name.to_string(), password: password.to_string(), create_date: create_date.to_string(), modify_date: modify_date.to_string()}
     }
 
     // encrypts the password and returns the base64-encoded ciphertext
     pub fn export_b64(&self) -> Result<String, Error>{
-        let plaintext = format!("{}~{}", self.site_name, self.password);
+        let plaintext = format!("{}~{}~{}~{}", self.site_name, self.password, self.create_date, self.modify_date);
         let ciphertext = encrypt_authenticated(&plaintext, &self.key)?;
         Ok(BASE64_STANDARD.encode(ciphertext))
     }
 }
 
-// finds the index of a password in a vector of PasswordEntries, given the site name
-pub fn find_pw_index(passwords: &Vec<PasswordEntry>, target: &String) -> Option<usize>{
-    for i in 0..passwords.len(){
-        if passwords[i].site_name == *target{
-            return Some(i);
-        }
-    }
-    None
-}
-
-// genrates a new password of length n, using only characters in the provided charset, writes the password to the provided string
-pub fn generate_password(n: u64, allow_lower: bool, allow_upper: bool, allow_digits: bool, allow_special: bool, password: &mut String){
-    // determine the allowed character set
-    let mut charset_str = String::new();
-    if allow_lower{
-        charset_str += "abcdefghijkmnopqrstuvwxyz";
-    }
-    if allow_upper{
-        charset_str += "ABCDEFGHJIKLMNOPQRSTUVWXYZ";
-    }
-    if allow_digits{
-        charset_str += "1234567890";
-    }
-    if allow_special{
-        charset_str += "!@#$%^&*()-=+_\"';:,./\\"
-    }
-    let charset: Vec<char> = charset_str.chars().collect();
-    let mut rng = OsRng;
-    let len = charset.len();
-    for _ in 0..n{
-        password.push(charset[rng.gen_range(0..len)]);
-    }
-}
-
-// generates a random 32-bit-key for encryption
-pub fn generate_key(key: &mut [u8; 32]){
-    let mut rng = OsRng;
-    rng.fill_bytes(key);
-}
+// returns the current time, accurate to the second
+pub fn get_time() -> String{
+    let time = chrono::offset::Local::now().to_string();
+    let tmp: Vec<&str> = time.split(".").collect();
+    tmp[0].to_string()
+}   
 
 // parses the header of a password file
 fn parse_header(file_header: &Vec<u8>) -> Result<Vec<&[u8]>, Error>{
@@ -158,11 +128,11 @@ fn decrypt_password(ciphertext: String, key: &[u8; 32]) -> Result<PasswordEntry,
     }
     let plaintext = decrypt_authenticated(&cipher_bytes, key)?;
     let segments: Vec<&str> = plaintext.split("~").collect();
-    if segments.len() != 2{
+    if segments.len() != 4{
         Err(Error::new(ErrorKind::InvalidData, "Invalid password entry"))
     }
     else{
-        Ok(PasswordEntry::new(&key, &segments[0].to_string(), &segments[1].to_string()))
+        Ok(PasswordEntry::new(&key, &segments[0].to_string(), &segments[1].to_string(), &segments[2].to_string(), &segments[3].to_string()))
     }
 }
 
@@ -189,6 +159,46 @@ fn decrypt_password_file(master_key: &[u8], keyblock_b64: &str, header_segments:
         passwords.push(decrypt_password(file_segments[i + 2].to_string(), &tmp_key)?);
     }
     Ok(passwords)
+}
+
+// finds the index of a password in a vector of PasswordEntries, given the site name
+pub fn find_pw_index(passwords: &Vec<PasswordEntry>, target: &String) -> Option<usize>{
+    for i in 0..passwords.len(){
+        if passwords[i].site_name == *target{
+            return Some(i);
+        }
+    }
+    None
+}
+
+// genrates a new password of length n, using only characters in the provided charset, writes the password to the provided string
+pub fn generate_password(n: u64, allow_lower: bool, allow_upper: bool, allow_digits: bool, allow_special: bool, password: &mut String){
+    // determine the allowed character set
+    let mut charset_str = String::new();
+    if allow_lower{
+        charset_str += "abcdefghijkmnopqrstuvwxyz";
+    }
+    if allow_upper{
+        charset_str += "ABCDEFGHJIKLMNOPQRSTUVWXYZ";
+    }
+    if allow_digits{
+        charset_str += "1234567890";
+    }
+    if allow_special{
+        charset_str += "!@#$%^&*()-=+_\"';:,./\\"
+    }
+    let charset: Vec<char> = charset_str.chars().collect();
+    let mut rng = OsRng;
+    let len = charset.len();
+    for _ in 0..n{
+        password.push(charset[rng.gen_range(0..len)]);
+    }
+}
+
+// generates a random 32-bit-key for encryption
+pub fn generate_key(key: &mut [u8; 32]){
+    let mut rng = OsRng;
+    rng.fill_bytes(key);
 }
 
 // encrypts a vector of password entries, and writes them to a file, along with the metadata
