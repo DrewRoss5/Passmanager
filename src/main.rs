@@ -50,7 +50,9 @@ struct CreateArgs{
     #[clap(short, long)]
     manual: Option<bool>,
     #[clap(short, long)]
-    len: Option<u64>
+    len: Option<u64>,
+    #[clap(short, long)]
+    note: Option<String>
 }
 
 #[derive(Args)]
@@ -224,10 +226,16 @@ fn main() {
                     generate_password(pw_len, config.2, config.3, config.4, config.5, &mut password);
                 }
             }
+            // determine if there is a note 
+            let note: String;
+            match args.note{
+                Some(tmp) => {note = tmp}
+                None => {note = String::new()}
+            }
             let mut pw_key: [u8; 32] = [0; 32];
             generate_key(&mut pw_key);
             let time = get_time();
-            passwords.push(PasswordEntry::new(&pw_key, &args.title, &password, &time, &time));
+            passwords.push(PasswordEntry::new(&pw_key, &args.title, &password, &time, &time, &note));
             // update the passwords
             export_password_file(&file_path, master_password, passwords).expect("Cannot create the new password");
             println!("Password created succesfully")
@@ -271,6 +279,9 @@ fn main() {
                 Some(index) => {
                     let tmp_pw = &passwords[index];
                     println!("Site name: {}\nDate created: {}\nLast modified: {}", tmp_pw.site_name, tmp_pw.create_date, tmp_pw.modify_date);
+                    if tmp_pw.note != ""{
+                        println!("Note: {}", tmp_pw.note)
+                    }
                 }
                 None => {println!("The password for {} does not exist", args.title);}
             }
@@ -327,7 +338,7 @@ fn main() {
                         return;
                     }
                     // update the password entry
-                    let pass_entry = PasswordEntry::new(&tmp.key, &tmp.site_name, &new_pass, &tmp.create_date, &get_time());
+                    let pass_entry = PasswordEntry::new(&tmp.key, &tmp.site_name, &new_pass, &tmp.create_date, &get_time(), &tmp.note);
                     passwords[index] = pass_entry;
                     export_password_file(&file_path, master_password, passwords).unwrap();
                     println!("Password updated successfully");

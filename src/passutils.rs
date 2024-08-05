@@ -15,17 +15,18 @@ pub struct  PasswordEntry{
     pub site_name: String,
     pub password: String,
     pub create_date: String,
-    pub modify_date: String
+    pub modify_date: String,
+    pub note: String
 }
 
 impl PasswordEntry{
-    pub fn new(key: &[u8; 32], site_name: &String, password: &String, create_date: &String, modify_date: &String) -> PasswordEntry{
-        Self { key: key.clone(), site_name: site_name.to_string(), password: password.to_string(), create_date: create_date.to_string(), modify_date: modify_date.to_string()}
+    pub fn new(key: &[u8; 32], site_name: &String, password: &String, create_date: &String, modify_date: &String, note: &String) -> PasswordEntry{
+        Self { key: key.clone(), site_name: site_name.to_string(), password: password.to_string(), create_date: create_date.to_string(), modify_date: modify_date.to_string(), note: note.to_string()}
     }
 
     // encrypts the password and returns the base64-encoded ciphertext
     pub fn export_b64(&self) -> Result<String, Error>{
-        let plaintext = format!("{}~{}~{}~{}", self.site_name, self.password, self.create_date, self.modify_date);
+        let plaintext = format!("{}~{}~{}~{}~{}", self.site_name, self.password, self.create_date, self.modify_date, self.note);
         let ciphertext = encrypt_authenticated(&plaintext, &self.key)?;
         Ok(BASE64_STANDARD.encode(ciphertext))
     }
@@ -128,11 +129,11 @@ fn decrypt_password(ciphertext: String, key: &[u8; 32]) -> Result<PasswordEntry,
     }
     let plaintext = decrypt_authenticated(&cipher_bytes, key)?;
     let segments: Vec<&str> = plaintext.split("~").collect();
-    if segments.len() != 4{
+    if segments.len() != 5{
         Err(Error::new(ErrorKind::InvalidData, "Invalid password entry"))
     }
     else{
-        Ok(PasswordEntry::new(&key, &segments[0].to_string(), &segments[1].to_string(), &segments[2].to_string(), &segments[3].to_string()))
+        Ok(PasswordEntry::new(&key, &segments[0].to_string(), &segments[1].to_string(), &segments[2].to_string(), &segments[3].to_string(), &segments[4].to_string()))
     }
 }
 
