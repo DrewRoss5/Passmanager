@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 base64 = "0.22.1"
 bcrypt = "0.15.1"
+chrono = "0.4.38"
 clap = {version="4.5.11", features=["derive"]}
 copypasta = "0.10.1"
 openssl = "0.10.66"
