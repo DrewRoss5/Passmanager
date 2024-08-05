@@ -16,19 +16,34 @@ pub struct  PasswordEntry{
     pub password: String,
     pub create_date: String,
     pub modify_date: String,
-    pub note: String
+    pub note: String,
+    pub username: String,
+    pub url: String
 }
 
 impl PasswordEntry{
-    pub fn new(key: &[u8; 32], site_name: &String, password: &String, create_date: &String, modify_date: &String, note: &String) -> PasswordEntry{
-        Self { key: key.clone(), site_name: site_name.to_string(), password: password.to_string(), create_date: create_date.to_string(), modify_date: modify_date.to_string(), note: note.to_string()}
+    pub fn new(key: &[u8; 32], site_name: &String, password: &String, create_date: &String, modify_date: &String, note: &Option<String>, uname: &Option<String>, url: &Option<String>) -> PasswordEntry{
+        // unwrap optional values before constructing the entry
+        let note_str = unwrap_str(note);
+        let user_str = unwrap_str(uname);
+        let url_str  = unwrap_str(url);
+        // return the entry
+        Self { key: key.clone(), site_name: site_name.to_string(), password: password.to_string(), create_date: create_date.to_string(), modify_date: modify_date.to_string(), note: note_str, username: user_str, url: url_str}
     }
 
     // encrypts the password and returns the base64-encoded ciphertext
     pub fn export_b64(&self) -> Result<String, Error>{
-        let plaintext = format!("{}~{}~{}~{}~{}", self.site_name, self.password, self.create_date, self.modify_date, self.note);
+        let plaintext = format!("{}~{}~{}~{}~{}~{}~{}", self.site_name, self.password, self.create_date, self.modify_date, self.note, self.username, self.url);
         let ciphertext = encrypt_authenticated(&plaintext, &self.key)?;
         Ok(BASE64_STANDARD.encode(ciphertext))
+    }
+}
+
+// takes an option string and returns the string if Some or an empty string if None 
+fn unwrap_str(string: &Option<String>) -> String{
+    match string{
+        Some(val) => {val.to_string()}
+        None => {String::new()}
     }
 }
 
@@ -129,11 +144,11 @@ fn decrypt_password(ciphertext: String, key: &[u8; 32]) -> Result<PasswordEntry,
     }
     let plaintext = decrypt_authenticated(&cipher_bytes, key)?;
     let segments: Vec<&str> = plaintext.split("~").collect();
-    if segments.len() != 5{
+    if segments.len() != 7{
         Err(Error::new(ErrorKind::InvalidData, "Invalid password entry"))
     }
     else{
-        Ok(PasswordEntry::new(&key, &segments[0].to_string(), &segments[1].to_string(), &segments[2].to_string(), &segments[3].to_string(), &segments[4].to_string()))
+        Ok(PasswordEntry::new(&key, &segments[0].to_string(), &segments[1].to_string(), &segments[2].to_string(), &segments[3].to_string(), &Some(segments[4].to_string()), &Some(segments[5].to_string()), &Some(segments[6].to_string())))
     }
 }
 
