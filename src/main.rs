@@ -322,6 +322,10 @@ fn main() {
                         let pw_len = config.1;
                         generate_password(pw_len, config.2, config.3, config.4, config.5, &mut new_pass);
                     }
+                    else if new_pass.contains("~"){
+                        println!("Passwords cannot contain a tilde (~)");
+                        return;
+                    }
                     // update the password entry
                     let pass_entry = PasswordEntry::new(&tmp.key, &tmp.site_name, &new_pass, &tmp.create_date, &get_time());
                     passwords[index] = pass_entry;
