@@ -7,8 +7,7 @@ While passmanager uses AES-256-CBC encryption, it has not been formally audited 
 - Add export functionality
 - Add support for bulk actions
 - Add password "directories" to store related passwords
-- Add additional password metadata (URL, Last Modified, Creation Date, etc.)
-  - Add a `list-info` command to view this data
+- Add additional password metadata (URL, Notes, etc.)
 
 # Getting Started
 - Clone this repo
@@ -32,11 +31,23 @@ Passwords are stored in .pwdb files. Every .pwdb is encrypted with a key derived
 ### create:
 - Usage: `passmanager create <NAME> [-f, --file-path FILE] [-l --length LENGTH] [-m --manual (true or false)]`
 - Creates a new password with the provided name by default this password is randomly generated.
-- Arguments
+- Arguments:
   - `NAME`: The name of the password to be created
   - `-f, --file`: The file to store the new password in (if not specified, this will default to the file specified in the user's config file)
   - `-l, --length`: The length, in characters, of the password to be generated (default = 16)
   - `-m --manual`: Value must be "true" or "false", if true, this will have the user manually set a password as opposed to generating one randomly
+### get:
+- Usage: `passmanager get <NAME> [-f, --file-path FILE]`
+- Copies the password with the specified name to the user's clipboard
+- Arguments:
+  - `NAME`: The name of the password to be copied
+  - `-f, --file`: The path to the password database file to read the password from
+### get-info:
+- Usage: Usage: `passmanager get-info <NAME> [-f, --file-path FILE]`
+- Displays data (currently, date created and date last modified) about the password with the provided name, without revealing the password itself
+- Arguments:
+    - `NAME`: The name of the password to be read
+    - `-f, --file`: The path to the password database file to read the password from
 ### delete:
 - Usage: `passmanager delete <NAME> [-f, --file-path FILE]`
 - Deletes the password with the specified name from the database
