@@ -7,8 +7,7 @@ While passmanager uses AES-256-CBC encryption, it has not been formally audited 
 - Add export functionality
 - Add support for bulk actions
 - Add password "directories" to store related passwords
-- Add additional password metadata (URL, Notes, etc.)
-
+  
 # Getting Started
 - Clone this repo
 - Install passmanager with `install/install.sh` (requires root password)
