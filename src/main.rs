@@ -2,7 +2,7 @@ mod passutils;
 
 use std::{fs, io::{self, Error, Write}, str::FromStr};
 use clap::{Args, Parser, Subcommand};
-use passutils::{export_file_key, export_password_file, find_pw_index, generate_key, generate_password, get_time, import_password_file, key_import_password_file, PasswordEntry};
+use passutils::{export_file_key, export_password_file, find_pw_index, generate_key, generate_password, get_time, import_password_file, key_import_password_file, unwrap_str, PasswordEntry};
 use serde_json;
 use whoami;
 use rpassword;
@@ -35,7 +35,7 @@ enum Commands{
     Create(CreateArgs),
     Get(DefaultArgs),
     GetInfo(DefaultArgs),
-    Update(DefaultArgs),
+    Update(EditArgs),
     Delete(DefaultArgs),
     LS {path: Option<String>},
     ExportKey(KeyArgs),
@@ -64,6 +64,19 @@ struct DefaultArgs{
     title: String,
     #[clap(short, long)]
     file_path: Option<String>
+}
+
+#[derive(Args)]
+struct EditArgs{
+    title: String,
+    #[clap(short, long)]
+    file_path: Option<String>,
+    #[clap(short, long)]
+    note: Option<String>,
+    #[clap(short, long)]
+    username: Option<String>,
+    #[clap(long)]
+    url: Option<String>
 }
 
 // arguments for commands relating to key files (export-key and import-with-key)
@@ -342,8 +355,12 @@ fn main() {
                         println!("Passwords cannot contain a tilde (~)");
                         return;
                     }
+                    // determine if new options have been set
+                    let note = unwrap_str(&args.note, tmp.note.as_str());
+                    let uname = unwrap_str(&args.username, tmp.username.as_str());
+                    let url = unwrap_str(&args.url, tmp.url.as_str());
                     // update the password entry
-                    let pass_entry = PasswordEntry::new(&tmp.key, &tmp.site_name, &new_pass, &tmp.create_date, &get_time(), &Some(tmp.note.clone()), &Some(tmp.username.clone()), &Some(tmp.url.clone()));
+                    let pass_entry = PasswordEntry::new(&tmp.key, &tmp.site_name, &new_pass, &tmp.create_date, &get_time(), &Some(note), &Some(uname), &Some(url));
                     passwords[index] = pass_entry;
                     export_password_file(&file_path, master_password, passwords).unwrap();
                     println!("Password updated successfully");

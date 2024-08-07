@@ -24,9 +24,9 @@ pub struct  PasswordEntry{
 impl PasswordEntry{
     pub fn new(key: &[u8; 32], site_name: &String, password: &String, create_date: &String, modify_date: &String, note: &Option<String>, uname: &Option<String>, url: &Option<String>) -> PasswordEntry{
         // unwrap optional values before constructing the entry
-        let note_str = unwrap_str(note);
-        let user_str = unwrap_str(uname);
-        let url_str  = unwrap_str(url);
+        let note_str = unwrap_str(note, "");
+        let user_str = unwrap_str(uname, "");
+        let url_str  = unwrap_str(url, "");
         // return the entry
         Self { key: key.clone(), site_name: site_name.to_string(), password: password.to_string(), create_date: create_date.to_string(), modify_date: modify_date.to_string(), note: note_str, username: user_str, url: url_str}
     }
@@ -40,11 +40,13 @@ impl PasswordEntry{
 }
 
 // takes an option string and returns the string if Some or an empty string if None 
-fn unwrap_str(string: &Option<String>) -> String{
+pub fn unwrap_str(string: &Option<String>, default: &str) -> String{
+    let result: String;
     match string{
-        Some(val) => {val.to_string()}
-        None => {String::new()}
+        Some(val) => {result = val.clone()}
+        None => {result = default.to_string()}
     }
+    result
 }
 
 // returns the current time, accurate to the second
