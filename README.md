@@ -28,12 +28,15 @@ Passwords are stored in .pwdb files. Every .pwdb is encrypted with a key derived
 - Arguments:
   - `PATH`: The path to create the password file at
 ### create:
-- Usage: `passmanager create <NAME> [-f, --file-path FILE] [-l --length LENGTH] [-m --manual (true or false)]`
+- Usage: `passmanager create <NAME> [-f, --file-path FILE] [-l --length LENGTH] [-n, --note NOTE] [-u, --username USERNAME] [--url URL] [-m --manual (true or false)]`
 - Creates a new password with the provided name by default this password is randomly generated.
 - Arguments:
   - `NAME`: The name of the password to be created
   - `-f, --file`: The file to store the new password in (if not specified, this will default to the file specified in the user's config file)
-  - `-l, --length`: The length, in characters, of the password to be generated (default = 16)
+  - `-l, --length`: The length, in characters, of the password to be generated (default = 16) 
+  - `-n, --note`: An optional note, can be anything
+  - `-u, --username`: The username corresponding to the password
+  - `--url`: The URL for the site the password's for
   - `-m --manual`: Value must be "true" or "false", if true, this will have the user manually set a password as opposed to generating one randomly
 ### get:
 - Usage: `passmanager get <NAME> [-f, --file-path FILE]`
@@ -54,10 +57,13 @@ Passwords are stored in .pwdb files. Every .pwdb is encrypted with a key derived
   - `NAME`: The name of the password to be deleted
   - `-f, --file`: The file to delete the password in (if not specified, this will default to the file specified in the user's config file)
 ### update:
-- Usage: `passmanager update <NAME> [-f, --file-path FILE]`
+- Usage: `passmanager update <NAME> [-f, --file-path FILE] [-n, --note NOTE] [-u, --username USERNAME] [--url URL]`
 - Updates the password with the provided name (currently, updates only the password and canno]t update the name)
 - Arguments
     - `NAME`: The name of the password to be updated
+    - `-n, --note`: Updates the optional note
+    - `-u, --username`: Updates the username corresponding to the password
+    - `--url`: Updates the URL for the site the password's for
     - `-f, --file`: The file to update the password in (if not specified, this will default to the file specified in the user's config file)
 ### ls:
 - Usage: `passmanager ls [-f, --file-path FILE]`
