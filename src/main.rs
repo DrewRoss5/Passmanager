@@ -211,10 +211,16 @@ fn main() {
                 Ok(tmp) => {master_password = tmp}
                 Err(_) => {return;}
             }
-            // validate the password name
+            // validate the password metadata
             if args.title.contains('~'){
                 println!("Passwords cannot contain a tilde (~)");
                 return;
+            }
+            for i in [&args.note, &args.username, &args.url]{
+                if unwrap_str(i, "").contains("~"){
+                    println!("Pasword information cannot contain a tilde (~)");
+                    return;
+                }
             }
             if find_pw_index(&passwords, &args.title).is_some(){
                 println!("A password with the name {} already exists", args.title);
@@ -359,6 +365,13 @@ fn main() {
                     let note = unwrap_str(&args.note, tmp.note.as_str());
                     let uname = unwrap_str(&args.username, tmp.username.as_str());
                     let url = unwrap_str(&args.url, tmp.url.as_str());
+                    // validate the above
+                    for i in [&note, &uname, &url]{
+                        if i.contains("~"){
+                            println!("Password information cannot have tildes (~)");
+                            return;
+                        }
+                    }
                     // update the password entry
                     let pass_entry = PasswordEntry::new(&tmp.key, &tmp.site_name, &new_pass, &tmp.create_date, &get_time(), &Some(note), &Some(uname), &Some(url));
                     passwords[index] = pass_entry;
