@@ -1,4 +1,4 @@
-# Passmanager
+# PassMan
 A CLI password manager for Linux
 ### ⚠️ Warning ⚠️
 While passmanager uses AES-256-CBC encryption, it has not been formally audited for security, as such there may be unknown vulnerabilites. **Use with caution.**
